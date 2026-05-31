@@ -37,7 +37,7 @@ class Database:
         async with aiosqlite.connect(self.db_path) as db:
             await db.execute("PRAGMA foreign_keys = ON;")
             db.row_factory = aiosqlite.Row
-            async with db.execute("SELECT * FROM habits WHERE user_id = ?", (user_id,)) as cursor:
+            async with db.execute("SELECT * FROM habits WHERE user_id = ? ORDER BY created_at DESC", (user_id,)) as cursor:
                 return await cursor.fetchall()
 
     async def delete_habit(self, habit_id: int):
@@ -58,6 +58,15 @@ class Database:
                 return True
             except aiosqlite.IntegrityError:
                 return False
+
+    async def remove_completion(self, habit_id: int, completed_date: date):
+        async with aiosqlite.connect(self.db_path) as db:
+            await db.execute("PRAGMA foreign_keys = ON;")
+            await db.execute(
+                "DELETE FROM completions WHERE habit_id = ? AND completed_date = ?",
+                (habit_id, completed_date.isoformat())
+            )
+            await db.commit()
 
     async def is_completed_today(self, habit_id: int, today: date):
         async with aiosqlite.connect(self.db_path) as db:
