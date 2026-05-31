@@ -18,6 +18,10 @@ async def start_add_habit(callback: CallbackQuery, state: FSMContext):
 
 @router.message(HabitStates.waiting_for_habit_name)
 async def process_habit_name(message: Message, state: FSMContext, db: Database):
+    if not message.text:
+        await message.answer("Пожалуйста, отправьте текстовое название привычки.")
+        return
+
     habit_name = message.text.strip()
     if not habit_name:
         await message.answer("Название привычки не может быть пустым. Пожалуйста, попробуйте еще раз.")
@@ -55,8 +59,34 @@ async def list_habits(callback: CallbackQuery, db: Database):
     await callback.answer()
 
 @router.callback_query(F.data.startswith("delete_"))
-async def delete_habit(callback: CallbackQuery, db: Database):
+async def delete_habit_confirmation(callback: CallbackQuery, db: Database):
     habit_id = int(callback.data.split("_")[1])
+
+    # Get habit name for confirmation
+    habits = await db.get_habits(callback.from_user.id)
+    habit = next((h for h in habits if h['id'] == habit_id), None)
+
+    if not habit:
+        await callback.answer("Привычка не найдена.")
+        return
+
+    kb = InlineKeyboardMarkup(inline_keyboard=[
+        [
+            InlineKeyboardButton(text="✅ Да, удалить", callback_data=f"confirm_delete_{habit_id}"),
+            InlineKeyboardButton(text="❌ Отмена", callback_data="list_habits")
+        ]
+    ])
+
+    await callback.message.edit_text(
+        f"Вы уверены, что хотите удалить привычку '<b>{habit['name']}</b>'?\n"
+        "Это действие удалит всю историю выполнений и статистику.",
+        reply_markup=kb
+    )
+    await callback.answer()
+
+@router.callback_query(F.data.startswith("confirm_delete_"))
+async def process_delete_habit(callback: CallbackQuery, db: Database):
+    habit_id = int(callback.data.split("_")[-1])
     await db.delete_habit(habit_id)
     await callback.answer("Привычка удалена!")
     await list_habits(callback, db)
@@ -75,7 +105,8 @@ async def track_habits(callback: CallbackQuery, db: Database):
         await callback.answer()
         return
 
-    text = f"✅ <b>Отметить выполнение за {today.isoformat()}:</b>\n\n"
+    date_str = today.strftime("%d.%m.%Y")
+    text = f"✅ <b>Отметить выполнение за {date_str}:</b>\n\n"
     buttons = []
     for habit in habits:
         is_done = await db.is_completed_today(habit['id'], today)
@@ -84,6 +115,8 @@ async def track_habits(callback: CallbackQuery, db: Database):
 
         if not is_done:
             buttons.append([InlineKeyboardButton(text=f"Отметить {habit['name']} как выполненную", callback_data=f"complete_{habit['id']}")])
+        else:
+            buttons.append([InlineKeyboardButton(text=f"🔄 Отменить выполнение {habit['name']}", callback_data=f"unmark_{habit['id']}")])
 
     buttons.append([InlineKeyboardButton(text="🔙 Назад в меню", callback_data="main_menu")])
     kb = InlineKeyboardMarkup(inline_keyboard=buttons)
@@ -100,4 +133,12 @@ async def complete_habit(callback: CallbackQuery, db: Database):
         await callback.answer("Отлично! Привычка отмечена как выполненная.")
     else:
         await callback.answer("Уже отмечено сегодня!")
+    await track_habits(callback, db)
+
+@router.callback_query(F.data.startswith("unmark_"))
+async def process_unmark(callback: CallbackQuery, db: Database):
+    from datetime import date
+    habit_id = int(callback.data.split("_")[1])
+    await db.remove_completion(habit_id, date.today())
+    await callback.answer("Выполнение отменено.")
     await track_habits(callback, db)
