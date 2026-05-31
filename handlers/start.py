@@ -8,15 +8,15 @@ router = Router()
 @router.message(CommandStart())
 async def cmd_start(message: Message):
     await message.answer(
-        f"Hi {message.from_user.full_name}! 👋\n"
-        "Welcome to the Habit Tracker Bot. I can help you build good habits and track your progress.",
+        f"Привет, {message.from_user.full_name}! 👋\n"
+        "Добро пожаловать в бот для отслеживания привычек. Я помогу тебе сформировать полезные привычки и следить за прогрессом.",
         reply_markup=get_main_menu()
     )
 
 @router.callback_query(lambda c: c.data == "main_menu")
 async def process_main_menu(callback: CallbackQuery):
     await callback.message.edit_text(
-        "Main Menu:",
+        "Главное меню:",
         reply_markup=get_main_menu()
     )
     await callback.answer()

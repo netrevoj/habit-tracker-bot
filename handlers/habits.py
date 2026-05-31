@@ -10,7 +10,7 @@ router = Router()
 @router.callback_query(F.data == "add_habit")
 async def start_add_habit(callback: CallbackQuery, state: FSMContext):
     await callback.message.edit_text(
-        "Please enter the name of your new habit:",
+        "Пожалуйста, введите название вашей новой привычки:",
         reply_markup=get_back_button()
     )
     await state.set_state(HabitStates.waiting_for_habit_name)
@@ -20,13 +20,13 @@ async def start_add_habit(callback: CallbackQuery, state: FSMContext):
 async def process_habit_name(message: Message, state: FSMContext, db: Database):
     habit_name = message.text.strip()
     if not habit_name:
-        await message.answer("Habit name cannot be empty. Please try again.")
+        await message.answer("Название привычки не может быть пустым. Пожалуйста, попробуйте еще раз.")
         return
 
     await db.add_habit(message.from_user.id, habit_name)
     await state.clear()
     await message.answer(
-        f"✅ Habit '{habit_name}' has been added!",
+        f"✅ Привычка '{habit_name}' успешно добавлена!",
         reply_markup=get_main_menu()
     )
 
@@ -36,19 +36,19 @@ async def list_habits(callback: CallbackQuery, db: Database):
 
     if not habits:
         await callback.message.edit_text(
-            "You don't have any habits yet. Add one!",
+            "У вас пока нет привычек. Добавьте одну!",
             reply_markup=get_main_menu()
         )
         await callback.answer()
         return
 
-    text = "📋 <b>Your Habits:</b>\n\n"
+    text = "📋 <b>Ваши привычки:</b>\n\n"
     buttons = []
     for habit in habits:
         text += f"• {habit['name']}\n"
-        buttons.append([InlineKeyboardButton(text=f"❌ Delete {habit['name']}", callback_data=f"delete_{habit['id']}")])
+        buttons.append([InlineKeyboardButton(text=f"❌ Удалить {habit['name']}", callback_data=f"delete_{habit['id']}")])
 
-    buttons.append([InlineKeyboardButton(text="🔙 Back to Menu", callback_data="main_menu")])
+    buttons.append([InlineKeyboardButton(text="🔙 Назад в меню", callback_data="main_menu")])
     kb = InlineKeyboardMarkup(inline_keyboard=buttons)
 
     await callback.message.edit_text(text, reply_markup=kb)
@@ -58,7 +58,7 @@ async def list_habits(callback: CallbackQuery, db: Database):
 async def delete_habit(callback: CallbackQuery, db: Database):
     habit_id = int(callback.data.split("_")[1])
     await db.delete_habit(habit_id)
-    await callback.answer("Habit deleted!")
+    await callback.answer("Привычка удалена!")
     await list_habits(callback, db)
 
 @router.callback_query(F.data == "track_habits")
@@ -69,13 +69,13 @@ async def track_habits(callback: CallbackQuery, db: Database):
 
     if not habits:
         await callback.message.edit_text(
-            "You don't have any habits to track. Add one!",
+            "У вас нет привычек для отслеживания. Добавьте одну!",
             reply_markup=get_main_menu()
         )
         await callback.answer()
         return
 
-    text = f"✅ <b>Track Habits for {today.isoformat()}:</b>\n\n"
+    text = f"✅ <b>Отметить выполнение за {today.isoformat()}:</b>\n\n"
     buttons = []
     for habit in habits:
         is_done = await db.is_completed_today(habit['id'], today)
@@ -83,9 +83,9 @@ async def track_habits(callback: CallbackQuery, db: Database):
         text += f"{status} {habit['name']}\n"
 
         if not is_done:
-            buttons.append([InlineKeyboardButton(text=f"Mark {habit['name']} done", callback_data=f"complete_{habit['id']}")])
+            buttons.append([InlineKeyboardButton(text=f"Отметить {habit['name']} как выполненную", callback_data=f"complete_{habit['id']}")])
 
-    buttons.append([InlineKeyboardButton(text="🔙 Back to Menu", callback_data="main_menu")])
+    buttons.append([InlineKeyboardButton(text="🔙 Назад в меню", callback_data="main_menu")])
     kb = InlineKeyboardMarkup(inline_keyboard=buttons)
 
     await callback.message.edit_text(text, reply_markup=kb)
@@ -97,7 +97,7 @@ async def complete_habit(callback: CallbackQuery, db: Database):
     habit_id = int(callback.data.split("_")[1])
     success = await db.mark_completed(habit_id, date.today())
     if success:
-        await callback.answer("Great job! Habit marked as completed.")
+        await callback.answer("Отлично! Привычка отмечена как выполненная.")
     else:
-        await callback.answer("Already completed today!")
+        await callback.answer("Уже отмечено сегодня!")
     await track_habits(callback, db)
